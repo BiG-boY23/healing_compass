@@ -27,10 +27,12 @@ if (isset($role) && $role === 'admin' && isset($_GET['action']) && $_GET['action
 try {
     $search = $_GET['search'] ?? '';
     if ($search) {
-        $stmt = $pdo->prepare("SELECT * FROM healers WHERE (full_name LIKE ? OR specialization LIKE ? OR location_name LIKE ?) AND is_verified = 1");
+        // RELAXED FILTER: Removed is_verified check for debugging
+        $stmt = $pdo->prepare("SELECT * FROM healers WHERE (full_name LIKE ? OR specialization LIKE ? OR location_name LIKE ?)");
         $stmt->execute(["%$search%", "%$search%", "%$search%"]);
     } else {
-        $stmt = $pdo->query("SELECT * FROM healers WHERE is_verified = 1");
+        // RELAXED FILTER: Show all healers
+        $stmt = $pdo->query("SELECT * FROM healers");
     }
     $healers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {

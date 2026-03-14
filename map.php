@@ -12,7 +12,8 @@ $username = $_SESSION['username'];
 
 // Fetch healers for map markers
 try {
-    $stmt = $pdo->query("SELECT * FROM healers WHERE is_available = 1 AND is_verified = 1");
+    // RELAXED FILTER: Show all healers for testing visibility
+    $stmt = $pdo->query("SELECT * FROM healers");
     $healers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $healers = [];

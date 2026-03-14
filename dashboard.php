@@ -176,7 +176,7 @@ try {
                         <div class="healer-row">
                             <?php
                             try {
-                                $stmt = $pdo->query("SELECT * FROM healers ORDER BY RAND() LIMIT 6");
+                                $stmt = $pdo->query("SELECT * FROM healers WHERE is_verified = 1 ORDER BY RAND() LIMIT 6");
                                 $nearby = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 foreach ($nearby as $h):
                             ?>

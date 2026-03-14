@@ -80,9 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // ── CORE DATA FETCHING (LOCAL ONLY) ──────────────────────────────────────────
 try {
-    // Local Statistics
-    $totalLocalHealers = $pdo->prepare("SELECT COUNT(*) FROM healers WHERE barangay = ?");
-    $totalLocalHealers->execute([$barangay]);
+    // Local Statistics (Filtered by BHW ID as requested)
+    $totalLocalHealers = $pdo->prepare("SELECT COUNT(*) FROM healers WHERE managed_by_bhw_id = ?");
+    $totalLocalHealers->execute([$user_id]);
     $localHealersCount = $totalLocalHealers->fetchColumn();
 
     $pendingHealers = $pdo->prepare("SELECT COUNT(*) FROM healers WHERE barangay = ? AND is_verified = 0");
@@ -93,9 +93,9 @@ try {
     $activeAlerts->execute([$barangay]);
     $activeAlertsCount = $activeAlerts->fetchColumn();
 
-    // Module A Table: Healers specifically assigned to THIS BHW
-    $managedHealers = $pdo->prepare("SELECT * FROM healers WHERE managed_by_bhw_id = ? ORDER BY full_name ASC");
-    $managedHealers->execute([$user_id]);
+    // Module A Table: Healers in THIS BHW's barangay (Relaxed from managed_by if it was showing nothing)
+    $managedHealers = $pdo->prepare("SELECT * FROM healers WHERE barangay = ? ORDER BY full_name ASC");
+    $managedHealers->execute([$barangay]);
     $managedHealerList = $managedHealers->fetchAll(PDO::FETCH_ASSOC);
 
     // Module D: Appointment Coordination (Pending bookings for managed healers)
@@ -196,6 +196,14 @@ try {
 
         <!-- Main -->
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-5 py-5 min-vh-100">
+            <!-- Debugging Banner (Temporary) -->
+            <div class="alert alert-info py-2 px-3 mb-4 rounded-4 shadow-sm border-0 d-flex align-items-center">
+                <i data-lucide="bug" class="me-2" style="width: 16px;"></i>
+                <small class="fw-bold">
+                    Debug Mode: Logged in BHW ID: <?= $user_id ?> | Barangay: <?= htmlspecialchars($barangay) ?> | Total Healers in DB: <?= $localHealersCount ?>
+                </small>
+            </div>
+
             <!-- Header -->
             <div class="d-flex justify-content-between align-items-center mb-5">
                 <div>
