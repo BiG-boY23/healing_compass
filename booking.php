@@ -316,7 +316,7 @@ $timeSlots = [
                     <!-- Info Note -->
                     <div class="mt-4 p-3 d-flex align-items-start gap-3 rounded-4" style="background: rgba(45, 79, 50, 0.04); border: 1px solid rgba(45, 79, 50, 0.08);">
                         <i data-lucide="info" class="flex-shrink-0 mt-1" style="width: 16px; color: var(--nature-forest); opacity: 0.6;"></i>
-                        <p class="small text-muted mb-0 lh-base">Your request will be sent to the healer for review. You'll be notified once it's confirmed. Bookings are subject to the practitioner's availability.</p>
+                        <p class="small text-muted mb-0 lh-base">Your request will be sent to the <strong>Barangay Health Worker (BHW)</strong> in charge of this healer. They will coordinate your schedule and notify you once the appointment is confirmed.</p>
                     </div>
                 </div>
             </div>

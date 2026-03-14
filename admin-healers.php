@@ -13,7 +13,13 @@ $username = $_SESSION['username'];
 // Fetch barangays for dropdown
 try {
     $barangays = $pdo->query("SELECT barangay_name FROM barangays ORDER BY barangay_name ASC")->fetchAll(PDO::FETCH_COLUMN);
-} catch (PDOException $e) { $barangays = []; }
+    // Fetch BHWs for assignment
+    $stmtBHWs = $pdo->query("SELECT id, username, barangay FROM users WHERE role = 'bhw' ORDER BY username ASC");
+    $bhwList = $stmtBHWs->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) { 
+    $barangays = []; 
+    $bhwList = [];
+}
 
 // Handle Actions (Add/Edit/Delete)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -54,50 +60,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             if ($action === 'add') {
-                $pdo->beginTransaction();
-                $email = strtolower(str_replace(' ', '', $fullName)) . rand(10,99) . "@healer.com";
-                $pass = password_hash('healer123', PASSWORD_DEFAULT);
-                $stmtUser = $pdo->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, 'healer')");
-                $stmtUser->execute([$fullName, $email, $pass]);
-                $newUserId = $pdo->lastInsertId();
-
-                $stmtHealer = $pdo->prepare("INSERT INTO healers (user_id, full_name, specialization, location_name, latitude, longitude, contact_info, description, treatment_methods, herbs_used, years_of_experience, profile_picture, barangay) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmtHealer->execute([$newUserId, $fullName, $specialization, $locationName, $latitude, $longitude, $contactInfo, $description, $methods, $herbs, $years, $profilePath, $barangay]);
-                $pdo->commit();
-                $success = "Healer profiled successfully!";
+                $bhwId = $_POST['managed_by_bhw_id'] ?: null;
+                $stmtHealer = $pdo->prepare("INSERT INTO healers (full_name, specialization, location_name, latitude, longitude, contact_info, description, treatment_methods, herbs_used, years_of_experience, profile_picture, barangay, managed_by_bhw_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmtHealer->execute([$fullName, $specialization, $locationName, $latitude, $longitude, $contactInfo, $description, $methods, $herbs, $years, $profilePath, $barangay, $bhwId]);
+                $success = "Healer profiled and assigned successfully!";
             } else {
-                $stmt = $pdo->prepare("UPDATE healers SET full_name = ?, specialization = ?, location_name = ?, latitude = ?, longitude = ?, contact_info = ?, description = ?, treatment_methods = ?, herbs_used = ?, years_of_experience = ?, profile_picture = ?, barangay = ? WHERE id = ?");
-                $stmt->execute([$fullName, $specialization, $locationName, $latitude, $longitude, $contactInfo, $description, $methods, $herbs, $years, $profilePath, $barangay, $healerId]);
+                $bhwId = $_POST['managed_by_bhw_id'] ?: null;
+                $stmt = $pdo->prepare("UPDATE healers SET full_name = ?, specialization = ?, location_name = ?, latitude = ?, longitude = ?, contact_info = ?, description = ?, treatment_methods = ?, herbs_used = ?, years_of_experience = ?, profile_picture = ?, barangay = ?, managed_by_bhw_id = ? WHERE id = ?");
+                $stmt->execute([$fullName, $specialization, $locationName, $latitude, $longitude, $contactInfo, $description, $methods, $herbs, $years, $profilePath, $barangay, $bhwId, $healerId]);
                 $success = "Healer profile updated!";
             }
         } catch (PDOException $e) {
-            if ($action === 'add') $pdo->rollBack();
             $error = "Database Error: " . $e->getMessage();
         }
     } elseif ($action === 'delete') {
         $healerId = $_POST['healer_id'];
         try {
-            $pdo->beginTransaction();
-            $stmtUser = $pdo->prepare("SELECT user_id FROM healers WHERE id = ?");
-            $stmtUser->execute([$healerId]);
-            $userId = $stmtUser->fetchColumn();
-
             $pdo->prepare("DELETE FROM healers WHERE id = ?")->execute([$healerId]);
-            if ($userId) {
-                $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$userId]);
-            }
-            $pdo->commit();
-            $success = "Healer removed from system.";
+            $success = "Healer profile removed from system.";
         } catch (PDOException $e) {
-            $pdo->rollBack();
             $error = "Delete error: " . $e->getMessage();
         }
     }
 }
 
-// Fetch healers
+// Fetch healers with managing BHW info
 try {
-    $stmt = $pdo->query("SELECT * FROM healers ORDER BY id DESC");
+    $stmt = $pdo->query("SELECT healers.*, users.username as bhw_name FROM healers LEFT JOIN users ON healers.managed_by_bhw_id = users.id ORDER BY healers.id DESC");
     $healers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $healers = [];
@@ -193,10 +182,9 @@ try {
                                     <thead class="bg-light">
                                         <tr>
                                             <th>Healer</th>
+                                            <th>Barangay</th>
+                                            <th>Managed By</th>
                                             <th>Specialization</th>
-                                            <th>Exp.</th>
-                                            <th>Location</th>
-                                            <th>Herbs/Methods</th>
                                             <th class="text-end">Actions</th>
                                         </tr>
                                     </thead>
@@ -210,22 +198,22 @@ try {
                                                     <div class="d-flex align-items-center text-start">
                                                         <img src="<?= htmlspecialchars($h['profile_picture'] ?? 'assets/img/avatar.png') ?>" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
                                                         <div>
-                                                            <div class="fw-bold"><?= htmlspecialchars($h['full_name']) ?></div>
+                                                            <div class="fw-bold text-success"><?= htmlspecialchars($h['full_name']) ?></div>
                                                             <div class="small text-muted"><?= htmlspecialchars($h['contact_info']) ?></div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td class="small fw-semibold"><?= htmlspecialchars($h['specialization']) ?></td>
-                                                <td><span class="badge bg-success bg-opacity-10 text-success"><?= $h['years_of_experience'] ?> Years</span></td>
-                                                <td class="small text-muted"><?= htmlspecialchars($h['location_name']) ?></td>
-                                                <td class="small">
-                                                    <div class="text-truncate" style="max-width: 200px;" title="<?= htmlspecialchars($h['herbs_used']) ?>">
-                                                        <strong>Herbs:</strong> <?= htmlspecialchars($h['herbs_used']) ?>
-                                                    </div>
-                                                    <div class="text-truncate" style="max-width: 200px;" title="<?= htmlspecialchars($h['treatment_methods']) ?>">
-                                                        <strong>Methods:</strong> <?= htmlspecialchars($h['treatment_methods']) ?>
+                                                <td class="small fw-semibold"><?= htmlspecialchars($h['barangay']) ?></td>
+                                                <td>
+                                                    <div class="small text-dark">
+                                                        <?php if ($h['bhw_name']): ?>
+                                                            <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill"><i class="bi bi-person-badge me-1"></i><?= htmlspecialchars($h['bhw_name']) ?></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill">Unassigned</span>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </td>
+                                                <td class="small"><?= htmlspecialchars($h['specialization']) ?></td>
                                                 <td class="text-end">
                                                     <button class="btn btn-sm btn-light rounded-circle shadow-sm me-1" onclick='editHealer(<?= json_encode($h) ?>)' title="Edit Profile"><i class="bi bi-pencil text-success"></i></button>
                                                     <button class="btn btn-sm btn-light rounded-circle shadow-sm" onclick="confirmHealerDelete(<?= $h['id'] ?>)" title="Remove Healer"><i class="bi bi-trash text-danger"></i></button>
@@ -286,6 +274,17 @@ try {
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label small fw-bold text-muted text-uppercase">Assign Managing BHW</label>
+                                        <select name="managed_by_bhw_id" id="bhwSelect" class="form-select">
+                                            <option value="">Unassigned (Open for BHW to claim)</option>
+                                            <?php foreach ($bhwList as $bhw): ?>
+                                                <option value="<?= $bhw['id'] ?>" data-barangay="<?= htmlspecialchars($bhw['barangay']) ?>">
+                                                    <?= htmlspecialchars($bhw['username']) ?> (<?= htmlspecialchars($bhw['barangay']) ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <!-- Image Selection UI -->
@@ -330,18 +329,18 @@ try {
                                 </div>
                             </div>
 
-                            <!-- Map and Location -->
-                            <div class="col-md-7">
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Practice Location Name</label>
-                                    <div class="input-group">
-                                        <input type="text" name="location_name" id="locName" class="form-control" placeholder="e.g. Brgy. Don Felipe, Ormoc City" required>
-                                        <button class="btn btn-outline-success" type="button" id="searchLocBtn">
-                                            <i class="bi bi-geo-fill"></i> Locate
-                                        </button>
+                                <!-- Map and Location -->
+                                <div class="col-md-7">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold text-muted text-uppercase">Practice Location Name</label>
+                                        <div class="input-group">
+                                            <input type="text" name="location_name" id="locName" class="form-control" placeholder="e.g. Brgy. Don Felipe, Ormoc City" required>
+                                            <button class="btn btn-outline-success" type="button" id="searchLocBtn">
+                                                <i class="bi bi-geo-fill"></i> Locate
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <p class="text-muted small mb-2"><i class="bi bi-info-circle me-2"></i>Type a location and click <strong>Locate</strong>, or click directly on the map.</p>
+                                    <p class="text-muted small mb-2"><i class="bi bi-info-circle me-2"></i>Type a location and click <strong>Locate</strong>, or click directly on the map.</p>
                                 <div id="healerMap"></div>
                                 <div class="row">
                                     <div class="col-6">
@@ -511,6 +510,7 @@ try {
             form.latitude.value = data.latitude;
             form.longitude.value = data.longitude;
             form.barangay.value = data.barangay || "";
+            form.managed_by_bhw_id.value = data.managed_by_bhw_id || "";
 
             // Update Map
             const latlng = [parseFloat(data.latitude), parseFloat(data.longitude)];
@@ -530,13 +530,13 @@ try {
 
         function confirmHealerDelete(id) {
             Swal.fire({
-                title: 'Confirm Removal',
-                text: "Removing this healer will also deactivate their platform credentials.",
+                title: 'Confirm Full Removal',
+                text: "Deleting this healer profile will also remove all their associated appointment records from the BHW system. This action cannot be undone.",
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#2d6a4f',
-                confirmButtonText: 'Permanently Remove'
+                confirmButtonText: 'Yes, Delete Everything'
             }).then((result) => {
                 if (result.isConfirmed) {
                     const form = document.createElement('form');

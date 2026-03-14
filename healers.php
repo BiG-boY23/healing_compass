@@ -12,22 +12,13 @@ if ($isLoggedIn) {
 if (isset($role) && $role === 'admin' && isset($_GET['action']) && $_GET['action'] === 'delete') {
     $delId = (int)$_GET['id'];
     try {
-        $pdo->beginTransaction();
-        // Get user_id first to clean up
-        $stmtUid = $pdo->prepare("SELECT user_id FROM healers WHERE id = ?");
-        $stmtUid->execute([$delId]);
-        $uid = $stmtUid->fetchColumn();
-
         $pdo->prepare("DELETE FROM healers WHERE id = ?")->execute([$delId]);
-        if ($uid) {
-            $pdo->prepare("DELETE FROM users WHERE id = ? AND role = 'healer'")->execute([$uid]);
-        }
         $pdo->commit();
         header("Location: healers.php?delete=success");
         exit();
     } catch (PDOException $e) {
         $pdo->rollBack();
-        header("Location: healers.php?error=" . urlencode("Could not delete healer."));
+        header("Location: healers.php?error=" . urlencode("Could not delete healer profile."));
         exit();
     }
 }
@@ -36,10 +27,10 @@ if (isset($role) && $role === 'admin' && isset($_GET['action']) && $_GET['action
 try {
     $search = $_GET['search'] ?? '';
     if ($search) {
-        $stmt = $pdo->prepare("SELECT healers.*, users.username FROM healers JOIN users ON healers.user_id = users.id WHERE healers.full_name LIKE ? OR healers.specialization LIKE ? OR healers.location_name LIKE ?");
+        $stmt = $pdo->prepare("SELECT * FROM healers WHERE (full_name LIKE ? OR specialization LIKE ? OR location_name LIKE ?) AND is_verified = 1");
         $stmt->execute(["%$search%", "%$search%", "%$search%"]);
     } else {
-        $stmt = $pdo->query("SELECT healers.*, users.username FROM healers JOIN users ON healers.user_id = users.id");
+        $stmt = $pdo->query("SELECT * FROM healers WHERE is_verified = 1");
     }
     $healers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -182,10 +173,19 @@ try {
                                     <div class="position-relative" style="height: 220px; overflow: hidden;">
                                         <div style="width: 100%; height: 100%; background: url('<?= htmlspecialchars($healer['profile_picture'] ?? 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png') ?>') center/cover no-repeat; background-color: var(--nature-accent);"></div>
                                         <!-- Badges overlay -->
-                                        <div class="position-absolute top-0 start-0 p-3 d-flex gap-2">
-                                            <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background: var(--nature-forest); font-size: 0.68rem;">
+                                        <div class="position-absolute top-0 start-0 p-3 d-flex flex-column gap-2">
+                                            <span class="badge rounded-pill px-3 py-2 fw-semibold shadow-sm" style="background: var(--nature-forest); font-size: 0.68rem; width: fit-content;">
                                                 <i data-lucide="shield-check" style="width: 11px; height: 11px; margin-right: 4px;"></i> Verified
                                             </span>
+                                            <?php if ($healer['is_available']): ?>
+                                                <span class="badge rounded-pill px-3 py-2 fw-bold shadow-sm" style="background: #E8F5E9; color: #2E7D32; font-size: 0.65rem; border: 1px solid #C8E6C9; width: fit-content;">
+                                                    <i class="bi bi-circle-fill me-1" style="font-size: 6px;"></i> ONLINE
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge rounded-pill px-3 py-2 fw-bold shadow-sm" style="background: #F5F5F5; color: #757575; font-size: 0.65rem; border: 1px solid #E0E0E0; width: fit-content;">
+                                                    <i class="bi bi-circle-fill me-1" style="font-size: 6px;"></i> AWAY
+                                                </span>
+                                            <?php endif; ?>
                                         </div>
                                         <?php if (!empty($healer['years_of_experience'])): ?>
                                         <div class="position-absolute top-0 end-0 p-3">
@@ -231,20 +231,22 @@ try {
                                         <!-- Action Buttons -->
                                         <?php if (isset($role) && $role === 'admin'): ?>
                                             <div class="d-flex gap-2">
-                                                <a href="admin-healers.php?edit=<?= $healer['id'] ?>"
+                                                <a href="admin-healers.php"
                                                    class="btn btn-outline-success flex-grow-1 rounded-pill py-2 fw-semibold" style="font-size: 0.85rem;">
-                                                    <i data-lucide="pencil" style="width: 14px;"></i> Edit
+                                                    <i data-lucide="shield" style="width: 14px;"></i> Admin Manage
                                                 </a>
-                                                <button onclick="confirmDelete(<?= $healer['id'] ?>)"
-                                                    class="btn btn-outline-danger flex-grow-1 rounded-pill py-2 fw-semibold" style="font-size: 0.85rem;">
-                                                    <i data-lucide="trash-2" style="width: 14px;"></i> Delete
-                                                </button>
                                             </div>
                                         <?php else: ?>
-                                            <a href="<?= $isLoggedIn ? 'booking.php?healer_id='.$healer['id'] : 'login.php' ?>"
-                                               class="btn w-100 rounded-pill py-3 fw-bold" style="background: var(--nature-forest); color: white; border: none; font-size: 0.9rem;">
-                                                <?= $isLoggedIn ? 'Request Consultation' : 'Login to Consult' ?>
-                                            </a>
+                                            <?php if ($healer['is_available']): ?>
+                                                <a href="<?= $isLoggedIn ? 'booking.php?healer_id='.$healer['id'] : 'login.php' ?>"
+                                                   class="btn w-100 rounded-pill py-3 fw-bold" style="background: var(--nature-forest); color: white; border: none; font-size: 0.9rem;">
+                                                    Request Consultation
+                                                </a>
+                                            <?php else: ?>
+                                                <button class="btn w-100 rounded-pill py-3 fw-bold disabled" style="background: #eee; color: #999; border: none; font-size: 0.9rem;">
+                                                    Currently Unavailable
+                                                </button>
+                                            <?php endif; ?>
                                         <?php endif; ?>
                                     </div>
                                 </div>
